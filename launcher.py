@@ -31,10 +31,10 @@ def print_banner():
     """Print application banner"""
     banner = f"""
 {Colors.HEADER}{'='*70}
-    🚀 wplacer autologin launcher :3
+    🚀 wplacer autologin launcher v1.0
 {'='*70}{Colors.ENDC}
 
-{Colors.OKCYAN}Available Tools:{Colors.ENDC}
+{Colors.OKCYAN}Enhanced Auto-Login Tool Suite{Colors.ENDC}
 """
     print(banner)
 
@@ -52,28 +52,48 @@ def check_dependencies():
         'autologin.py': 'Auto Login Tool',
         'convert_email_files.py': 'Email File Converter',
         'setup.py': 'Setup Script',
-        'requirements.txt': 'Dependencies',
-        'readme.md': 'Documentation'
+        'requirements.txt': 'Dependencies'
+    }
+    
+    # Check for data files
+    data_files = {
+        'emails.txt': 'Account Data',
+        'proxies.txt': 'Proxy List',
+        'config.json': 'Configuration'
     }
     
     colored_print("\n📋 System Status Check:", Colors.BOLD)
     print("-" * 50)
     
-    all_good = True
+    # Check core files
+    colored_print("Core Files:", Colors.OKCYAN)
+    all_core_good = True
     for filename, description in files_to_check.items():
         status = check_file_exists(filename)
         print(f"  {description:<20} : {status}")
         if "Missing" in status:
-            all_good = False
+            all_core_good = False
+    
+    # Check data files
+    colored_print("\nData Files:", Colors.OKCYAN)
+    all_data_good = True
+    for filename, description in data_files.items():
+        status = check_file_exists(filename)
+        print(f"  {description:<20} : {status}")
+        if "Missing" in status:
+            all_data_good = False
     
     print("-" * 50)
     
-    if all_good:
-        colored_print("✅ All files present and ready!", Colors.OKGREEN)
+    if all_core_good:
+        colored_print("✅ All core files present and ready!", Colors.OKGREEN)
     else:
-        colored_print("⚠️  Some files are missing. Some features may not work.", Colors.WARNING)
+        colored_print("⚠️  Some core files are missing. Some features may not work.", Colors.WARNING)
     
-    return all_good
+    if not all_data_good:
+        colored_print("ℹ️  Some data files are missing. You may need to create them.", Colors.OKCYAN)
+    
+    return all_core_good
 
 def run_script(script_name, description):
     """Run a Python script with error handling"""
@@ -134,51 +154,38 @@ def run_setup():
     colored_print("\n⚙️  Running setup...", Colors.OKBLUE)
     return run_script('setup.py', 'Setup Process')
 
-def show_readme():
-    """Display readme content"""
-    if not os.path.exists('readme.md'):
-        colored_print("❌ readme.md not found!", Colors.FAIL)
-        return
-    
-    colored_print("\n📖 README Contents:", Colors.OKBLUE)
-    colored_print("="*60, Colors.OKBLUE)
-    
-    try:
-        with open('readme.md', 'r', encoding='utf-8') as f:
-            content = f.read()
-            # Limit output to prevent overwhelming the terminal
-            lines = content.split('\n')
-            if len(lines) > 50:
-                for line in lines[:47]:
-                    print(line)
-                colored_print(f"\n... ({len(lines)-47} more lines) ...", Colors.WARNING)
-                colored_print("📄 Open readme.md for full documentation", Colors.OKCYAN)
-            else:
-                print(content)
-    except Exception as e:
-        colored_print(f"❌ Error reading readme: {str(e)}", Colors.FAIL)
+
 
 def show_data_info():
     """Show information about data directory"""
-    if os.path.exists('data'):
-        colored_print("\n📁 Data Directory Contents:", Colors.OKBLUE)
-        try:
-            files = os.listdir('data')
-            if files:
-                for i, file in enumerate(files[:10], 1):  # Show first 10 files
-                    file_path = os.path.join('data', file)
-                    size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
-                    file_type = "📁 DIR" if os.path.isdir(file_path) else "📄 FILE"
-                    print(f"  {i:2}. {file_type} {file:<30} ({size} bytes)")
-                
-                if len(files) > 10:
-                    colored_print(f"     ... and {len(files)-10} more items", Colors.WARNING)
-            else:
-                colored_print("  📭 Directory is empty", Colors.WARNING)
-        except PermissionError:
-            colored_print("  ❌ Permission denied", Colors.FAIL)
-    else:
+    data_dir = 'data'
+    if not os.path.exists(data_dir):
         colored_print("\n📁 Data directory not found", Colors.WARNING)
+        colored_print("Would you like to create it? (y/n): ", Colors.OKCYAN, end="")
+        if input().lower().startswith('y'):
+            try:
+                os.makedirs(data_dir, exist_ok=True)
+                colored_print("✅ Data directory created successfully!", Colors.OKGREEN)
+            except Exception as e:
+                colored_print(f"❌ Failed to create directory: {str(e)}", Colors.FAIL)
+        return
+        
+    colored_print("\n📁 Data Directory Contents:", Colors.OKBLUE)
+    try:
+        files = os.listdir(data_dir)
+        if files:
+            for i, file in enumerate(files[:10], 1):  # Show first 10 files
+                file_path = os.path.join(data_dir, file)
+                size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
+                file_type = "📁 DIR" if os.path.isdir(file_path) else "📄 FILE"
+                print(f"  {i:2}. {file_type} {file:<30} ({size} bytes)")
+            
+            if len(files) > 10:
+                colored_print(f"     ... and {len(files)-10} more items", Colors.WARNING)
+        else:
+            colored_print("  📭 Directory is empty", Colors.WARNING)
+    except PermissionError:
+        colored_print("  ❌ Permission denied", Colors.FAIL)
 
 def main_menu():
     """Display main menu and handle user selection"""
@@ -193,17 +200,16 @@ def main_menu():
             ("3", "🌐 Start API Server", "api_server.py"),
             ("4", "🔐 Run Auto Login Tool", "autologin.py"),
             ("5", "📧 Convert Email Files", "convert_email_files.py"),
-            ("6", "📖 View README", "readme.md"),
-            ("7", "📁 Show Data Directory", "data/"),
-            ("8", "🔍 System Status Check", "check"),
-            ("9", "🚪 Exit", "exit")
+            ("6", "📁 Show Data Directory", "data/"),
+            ("7", "🔍 System Status Check", "check"),
+            ("8", "🚪 Exit", "exit")
         ]
         
         for option, description, _ in menu_options:
             print(f"  {Colors.OKCYAN}{option}{Colors.ENDC}. {description}")
         
         print("\n" + "-"*70)
-        choice = input(f"{Colors.BOLD}Select option (1-9): {Colors.ENDC}").strip()
+        choice = input(f"{Colors.BOLD}Select option (1-8): {Colors.ENDC}").strip()
         
         if choice == "1":
             run_setup()
@@ -218,16 +224,14 @@ def main_menu():
         elif choice == "5":
             run_script('convert_email_files.py', 'Email File Converter')
         elif choice == "6":
-            show_readme()
-        elif choice == "7":
             show_data_info()
-        elif choice == "8":
+        elif choice == "7":
             check_dependencies()
-        elif choice == "9":
+        elif choice == "8":
             colored_print("\n👋 Baiiii, thank you for using my toooollll!", Colors.OKGREEN)
             break
         else:
-            colored_print(f"\n❌ Invalid choice '{choice}'. Please select 1-9.", Colors.FAIL)
+            colored_print(f"\n❌ Invalid choice '{choice}'. Please select 1-8.", Colors.FAIL)
         
         # Pause before showing menu again (except for exit)
         if choice != "9":
@@ -240,12 +244,13 @@ def startup_check():
     colored_print(f"🐍 Python version: {sys.version.split()[0]}", Colors.OKCYAN)
     
     # Quick file check
-    critical_files = ['api_server.py', 'autologin.py', 'convert_email_files.py']
+    critical_files = ['api_server.py', 'autologin.py', 'convert_email_files.py', 'setup.py']
     missing_files = [f for f in critical_files if not os.path.exists(f)]
     
     if missing_files:
-        colored_print(f"\n⚠️  Warning: Missing files: {', '.join(missing_files)}", Colors.WARNING)
+        colored_print(f"\n⚠️  Warning: Missing critical files: {', '.join(missing_files)}", Colors.WARNING)
         colored_print("Some features may not be available.", Colors.WARNING)
+        colored_print("Run option 7 (System Status Check) for more details.", Colors.OKCYAN)
 
 def main():
     """Main application entry point"""

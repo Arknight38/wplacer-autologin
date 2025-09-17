@@ -21,6 +21,7 @@ from typing import List, Dict, Tuple, Optional
 import threading
 from queue import Queue
 import argparse
+import shutil
 
 # Color codes for better terminal output
 class Colors:
@@ -59,13 +60,59 @@ logger.handlers = [handler]
 
 # Constants
 CONSENT_BTN_XPATH = '/html/body/div[2]/div[1]/div[2]/c-wiz/main/div[3]/div/div/div[2]/div/div/button'
-STATE_FILE = "./data/data.json"
-EMAILS_FILE = "./data/emails.txt"
-PROXIES_FILE = "./data/proxies.txt"
-CONFIG_FILE = "./data/config.json"
+DATA_DIR = "./data"
+PROFILES_DIR = "./wplace_profiles"
+STATE_FILE = f"{DATA_DIR}/data.json"
+EMAILS_FILE = f"{DATA_DIR}/emails.txt"
+PROXIES_FILE = f"{DATA_DIR}/proxies.txt"
+CONFIG_FILE = f"{DATA_DIR}/config.json"
 POST_URL = "http://127.0.0.1:80/user"
 CTRL_HOST, CTRL_PORT = "127.0.0.1", 9051
 SOCKS_HOST, SOCKS_PORT = "127.0.0.1", 9050
+
+def ensure_data_directory():
+    """Ensure data directory exists and create required files if missing"""
+    try:
+        # Create data directory if it doesn't exist
+        if not os.path.exists(DATA_DIR):
+            logger.info(f"{Colors.WARNING}Data directory not found. Creating {DATA_DIR}...{Colors.ENDC}")
+            os.makedirs(DATA_DIR, exist_ok=True)
+            
+        # Create profiles directory if it doesn't exist
+        if not os.path.exists(PROFILES_DIR):
+            logger.info(f"{Colors.WARNING}Profiles directory not found. Creating {PROFILES_DIR}...{Colors.ENDC}")
+            os.makedirs(PROFILES_DIR, exist_ok=True)
+            
+        # Create empty files if they don't exist
+        for file_path in [STATE_FILE, EMAILS_FILE, PROXIES_FILE, CONFIG_FILE]:
+            if not os.path.exists(file_path):
+                with open(file_path, 'w') as f:
+                    if file_path == CONFIG_FILE:
+                        json.dump({}, f)
+                    elif file_path == STATE_FILE:
+                        json.dump({"processed": []}, f)
+                logger.info(f"{Colors.OKGREEN}Created file: {file_path}{Colors.ENDC}")
+                
+        return True
+    except Exception as e:
+        logger.error(f"{Colors.FAIL}Failed to create data directory: {e}{Colors.ENDC}")
+        return False
+
+def poll_cookie_any_context(browser, timeout_s=30):
+    """Poll for cookie across any browser context with timeout"""
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        try:
+            for page in browser.pages:
+                cookies = page.context.cookies()
+                for c in cookies:
+                    if c.get("name") == "j":
+                        return c
+        except Exception as e:
+            logger.debug(f"Cookie polling error: {e}")
+            pass
+        time.sleep(0.1)
+    return None
 
 # Enhanced solver API endpoints
 SOLVER_BASE_URL = "http://localhost:8080"
@@ -197,6 +244,8 @@ class EnhancedPhoneVerificationHandler:
         self.session.timeout = 10
         self.balance_checked = False
         self.has_balance = False
+        self.retry_count = 3
+        self.retry_delay = 5
     
     def check_balance(self) -> bool:
         """Check SMS service balance with caching"""
@@ -228,23 +277,44 @@ class EnhancedPhoneVerificationHandler:
             return False
     
     def get_phone_number(self) -> Tuple[Optional[str], Optional[str]]:
-        """Get a phone number for verification with better logging"""
-        try:
-            logger.info(f"{Colors.OKCYAN}📱 Requesting phone number...{Colors.ENDC}")
-            params = {"service": self.service_code, "country": self.country}
-            r = self.session.get(PHONE_GET_ENDPOINT, params=params, timeout=15)
-            if r.status_code == 200:
-                data = r.json()
-                task_id = data.get("task_id")
-                phone_number = data.get("phone_number")
-                if task_id and phone_number:
-                    logger.info(f"{Colors.OKGREEN}📱 Got phone: {phone_number}{Colors.ENDC}")
-                    return task_id, phone_number
-            logger.warning(f"{Colors.WARNING}❌ Failed to get phone: {r.status_code} - {r.text}{Colors.ENDC}")
-            return None, None
-        except Exception as e:
-            logger.warning(f"{Colors.WARNING}❌ Phone request error: {e}{Colors.ENDC}")
-            return None, None
+        """Get a phone number for verification with better logging and retry mechanism"""
+        for attempt in range(1, self.retry_count + 1):
+            try:
+                logger.info(f"{Colors.OKCYAN}📱 Requesting phone number (attempt {attempt}/{self.retry_count})...{Colors.ENDC}")
+                params = {"service": self.service_code, "country": self.country}
+                r = self.session.get(PHONE_GET_ENDPOINT, params=params, timeout=15)
+                
+                if r.status_code == 200:
+                    data = r.json()
+                    task_id = data.get("task_id")
+                    phone_number = data.get("phone_number")
+                    if task_id and phone_number:
+                        logger.info(f"{Colors.OKGREEN}📱 Got phone: {phone_number}{Colors.ENDC}")
+                        return task_id, phone_number
+                elif r.status_code == 429:
+                    logger.warning(f"{Colors.WARNING}⚠️ Rate limited. Waiting before retry...{Colors.ENDC}")
+                    time.sleep(self.retry_delay * 2)  # Longer delay for rate limiting
+                elif r.status_code >= 500:
+                    logger.warning(f"{Colors.WARNING}⚠️ Server error ({r.status_code}). Retrying...{Colors.ENDC}")
+                    time.sleep(self.retry_delay)
+                else:
+                    logger.warning(f"{Colors.WARNING}❌ Failed to get phone: {r.status_code} - {r.text}{Colors.ENDC}")
+                    # Don't retry for client errors (except rate limiting)
+                    if r.status_code >= 400 and r.status_code < 500 and r.status_code != 429:
+                        break
+                    time.sleep(self.retry_delay)
+            except requests.exceptions.Timeout:
+                logger.warning(f"{Colors.WARNING}⏱️ Request timed out. Retrying...{Colors.ENDC}")
+                time.sleep(self.retry_delay)
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"{Colors.WARNING}🔌 Connection error. Retrying...{Colors.ENDC}")
+                time.sleep(self.retry_delay * 2)  # Longer delay for connection issues
+            except Exception as e:
+                logger.warning(f"{Colors.WARNING}❌ Phone request error: {e}{Colors.ENDC}")
+                time.sleep(self.retry_delay)
+                
+        logger.error(f"{Colors.FAIL}❌ Failed to get phone number after {self.retry_count} attempts{Colors.ENDC}")
+        return None, None
     
     def wait_for_sms(self, task_id: str, timeout: Optional[int] = None) -> Optional[str]:
         """Wait for SMS code with enhanced progress tracking"""
@@ -337,21 +407,41 @@ class InteractiveBrowserManager:
         logger.info(f"\n{Colors.OKGREEN}✅ All interactive browser sessions completed!{Colors.ENDC}")
     
     def _open_single_interactive_browser(self, account_data: Dict):
-        """Open a single interactive browser session"""
+        """Open a single interactive browser session with persistent profile"""
         email = account_data['email']
         google_login_url = account_data['google_login_url']
+        
+        # Create profile directory for this email
+        profile_path = f"{PROFILES_DIR}/profile_{email.replace('@', '_')}"
+        os.makedirs(profile_path, exist_ok=True)
         
         # Use no proxy for interactive sessions to avoid connection issues
         try:
             with Camoufox(
+                persistent_context=True,
+                user_data_dir=profile_path,
                 headless=False,  # Interactive mode
                 humanize=True,
                 disable_coop=True,
+                block_images=True,
                 screen=Screen(max_width=1920, max_height=1080),
                 fonts=["Arial", "Helvetica", "Times New Roman", "Verdana"],
                 os=["windows", "macos", "linux"],
                 geoip=True,
-                i_know_what_im_doing=True
+                i_know_what_im_doing=True,
+                firefox_user_prefs={
+                    "security.webauth.webauthn": False,
+                    "security.webauth.webauthn_enable_softtoken": False,
+                    "security.webauth.webauthn_enable_usbtoken": False,
+                    "security.webauth.webauthn_enable_android_fido2": False,
+                    "signon.rememberSignons": False,
+                    "signon.autofillForms": False,
+                    "signon.generation.enabled": False,
+                    "signon.management.page.breach-alerts.enabled": False,
+                    "media.peerconnection.enabled": False,
+                    "media.navigator.enabled": False,
+                    "media.peerconnection.video.enabled": False,
+                }
             ) as browser:
                 page = browser.new_page()
                 page.set_default_timeout(300000)  # 5 minute timeout for interactive

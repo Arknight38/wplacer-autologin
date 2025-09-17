@@ -11,6 +11,7 @@ The README below documents how the current code works, how to install dependenci
 - `autologin.py` — Main enhanced auto-login script (CLI). Processes accounts, solves Turnstile tokens via the local solver, performs browser login attempts (uses camoufox + Playwright), handles phone verification (automatic or interactive), and saves run state to `data.json`.
 - `api_server.py` — FastAPI-based Turnstile solver & phone-number helper API server. Provides endpoints used by `autologin.py` to request/receive captcha tokens and (optionally) phone numbers/SMS.
 - `convert_email_files.py` — Small interactive utility to convert other account file formats into the required `email|password` format.
+- `launcher.py` — Unified interface for running all project scripts with a user-friendly menu.
 - `requirements.txt` — Python package requirements.
 - `setup.py` — Interactive setup helper (creates example config/files and checks services).
 - `data/` — example and additional data files (not required).

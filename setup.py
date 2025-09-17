@@ -20,6 +20,7 @@ class Colors:
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def print_banner():
     """Print setup banner"""
@@ -85,6 +86,27 @@ def check_dependencies():
     print(f"{Colors.OKGREEN}✅ All dependencies are installed!{Colors.ENDC}")
     return True
 
+def create_directories():
+    """Create necessary directories"""
+    print(f"\n{Colors.OKBLUE}📁 Creating directories...{Colors.ENDC}")
+    
+    directories = ["data"]
+    created_dirs = []
+    
+    for directory in directories:
+        dir_path = pathlib.Path(directory)
+        if not dir_path.exists():
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                print(f"{Colors.OKGREEN}✅ Created directory: {directory}{Colors.ENDC}")
+                created_dirs.append(directory)
+            except Exception as e:
+                print(f"{Colors.FAIL}❌ Failed to create directory {directory}: {e}{Colors.ENDC}")
+        else:
+            print(f"{Colors.WARNING}ℹ️  Directory {directory} already exists{Colors.ENDC}")
+    
+    return created_dirs
+
 def create_config_files():
     """Create necessary configuration files"""
     print(f"\n{Colors.OKBLUE}📄 Creating configuration files...{Colors.ENDC}")
@@ -112,12 +134,17 @@ def create_config_files():
                 "show_colors": True,
                 "save_logs": False,
                 "log_file": "autologin.log"
+            },
+            "file_paths": {
+                "emails": "data/emails.txt",
+                "proxies": "data/proxies.txt",
+                "data_file": "data/data.json"
             }
         }
     }
     
     example_files = {
-        "emails.txt": """# Email and password file format
+        "data/emails.txt": """# Email and password file format
 # Each line should be: email|password
 # Lines starting with # are comments and will be ignored
 # 
@@ -128,7 +155,7 @@ def create_config_files():
 # Add your email/password combinations below:
 """,
         
-        "proxies.txt": """# HTTP Proxy list (one per line)
+        "data/proxies.txt": """# HTTP Proxy list (one per line)
 # Format: host:port
 # Lines starting with # are comments
 #
@@ -137,129 +164,6 @@ def create_config_files():
 # proxy.example.com:3128
 #
 # Add your proxies below:
-""",
-        
-        "README.md": f"""# Enhanced Auto-Login Tool
-
-## Features
-- 🎨 Beautiful colorful console output with progress bars
-- 🌐 Interactive browser sessions for phone verification
-- ⚙️ Configuration wizard for easy setup
-- 📊 Real-time statistics and progress tracking
-- 🔄 Smart retry logic with exponential backoff
-- 📱 Automated and manual phone verification support
-- 🛡️ Enhanced error handling and recovery
-
-## Quick Start
-
-1. **Setup**: Run the setup script first
-   ```bash
-   python setup.py
-   ```
-
-2. **Configuration**: Run the configuration wizard
-   ```bash
-   python enhanced_autologin.py --config
-   ```
-
-3. **Add your credentials**: Edit `emails.txt` with your email/password pairs
-   ```
-   user1@gmail.com|password123
-   user2@example.com|mypassword456
-   ```
-
-4. **Add proxies**: Edit `proxies.txt` with your HTTP proxies
-   ```
-   192.168.1.1:8080
-   proxy.example.com:3128
-   ```
-
-5. **Run the script**:
-   ```bash
-   python enhanced_autologin.py
-   ```
-
-## Command Line Options
-
-- `--config`: Run configuration wizard
-- `--interactive-only`: Only open browsers for phone verification
-- `--no-progress`: Disable progress bar
-
-## File Structure
-
-- `enhanced_autologin.py` - Main script
-- `config.json` - Configuration settings
-- `emails.txt` - Email/password pairs
-- `proxies.txt` - HTTP proxy list
-- `data.json` - State file (auto-generated)
-
-## Phone Verification
-
-The script supports both automatic and interactive phone verification:
-
-1. **Automatic**: Uses SMS service API (requires configuration)
-2. **Interactive**: Opens browser windows for manual verification
-
-## Requirements
-
-- Python 3.8+
-- TOR proxy running on localhost:9050
-- CAPTCHA solver API on localhost:8080
-- HTTP proxies for initial requests
-
-## Troubleshooting
-
-### Common Issues:
-
-1. **TOR not running**: Make sure TOR is running on port 9050
-2. **CAPTCHA solver offline**: Check if solver API is available on port 8080
-3. **No proxies**: Add valid HTTP proxies to proxies.txt
-4. **Phone verification fails**: Enable interactive mode in config
-
-### Getting Help:
-
-1. Check the console output for detailed error messages
-2. Review the configuration in `config.json`
-3. Enable debug logging in config for more details
-
-## Configuration Options
-
-### Main Settings:
-- `use_phone_verification`: Enable/disable phone verification
-- `max_retries_per_account`: How many times to retry failed accounts
-- `interactive_browser_for_phone`: Open browsers for manual phone verification
-- `browser_timeout`: Browser timeout in seconds
-
-### Advanced Settings:
-- `delay_between_accounts`: Random delay range between accounts
-- `auto_tor_renewal`: Automatically get new TOR identity
-- `show_progress_bar`: Show animated progress bar
-
-## Example Usage
-
-```bash
-# Run with default settings
-python enhanced_autologin.py
-
-# Configure settings interactively
-python enhanced_autologin.py --config
-
-# Only open browsers for accounts needing phone verification
-python enhanced_autologin.py --interactive-only
-
-# Run without progress bar (useful for logging)
-python enhanced_autologin.py --no-progress
-```
-
-## Safety Features
-
-- Automatic backups of state file
-- Graceful handling of interruptions (Ctrl+C)
-- Smart retry logic to avoid rate limits
-- Detailed logging for debugging
-- Configuration validation
-
-Enjoy using the Enhanced Auto-Login Tool! 🚀
 """
     }
     
@@ -281,6 +185,9 @@ Enjoy using the Enhanced Auto-Login Tool! 🚀
     # Create example files
     for filename, content in example_files.items():
         file_path = pathlib.Path(filename)
+        # Create parent directories if they don't exist
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
         if not file_path.exists():
             try:
                 with open(file_path, 'w') as f:
@@ -327,11 +234,16 @@ def check_services():
     
     return service_status
 
-def print_setup_summary(created_files, service_status):
+def print_setup_summary(created_dirs, created_files, service_status):
     """Print setup completion summary"""
     print(f"\n{Colors.HEADER}{'='*80}")
     print("📋 Setup Summary")
     print(f"{'='*80}{Colors.ENDC}")
+    
+    if created_dirs:
+        print(f"\n{Colors.OKBLUE}📁 Directories Created:{Colors.ENDC}")
+        for dirname in created_dirs:
+            print(f"  {Colors.OKGREEN}✅ {dirname}/{Colors.ENDC}")
     
     print(f"\n{Colors.OKBLUE}📄 Files Created:{Colors.ENDC}")
     if created_files:
@@ -356,11 +268,11 @@ def print_setup_summary(created_files, service_status):
         print(f"  {Colors.OKCYAN}   - TOR: Start TOR daemon with SOCKS on port 9050{Colors.ENDC}")
         print(f"  {Colors.OKCYAN}   - CAPTCHA: Start your CAPTCHA solver API on port 8080{Colors.ENDC}")
     
-    if "emails.txt" in created_files:
-        print(f"  {Colors.WARNING}2. Add your email/password pairs to emails.txt{Colors.ENDC}")
+    if "data/emails.txt" in created_files:
+        print(f"  {Colors.WARNING}2. Add your email/password pairs to data/emails.txt{Colors.ENDC}")
     
-    if "proxies.txt" in created_files:
-        print(f"  {Colors.WARNING}3. Add HTTP proxies to proxies.txt{Colors.ENDC}")
+    if "data/proxies.txt" in created_files:
+        print(f"  {Colors.WARNING}3. Add HTTP proxies to data/proxies.txt{Colors.ENDC}")
     
     print(f"  {Colors.OKGREEN}4. Run configuration wizard: python enhanced_autologin.py --config{Colors.ENDC}")
     print(f"  {Colors.OKGREEN}5. Start the script: python enhanced_autologin.py{Colors.ENDC}")
@@ -388,11 +300,11 @@ def interactive_file_setup():
         
         if emails:
             try:
-                with open('emails.txt', 'a') as f:
+                with open('data/emails.txt', 'a') as f:
                     f.write('\n# Added by setup wizard:\n')
                     for email in emails:
                         f.write(f"{email}\n")
-                print(f"{Colors.OKGREEN}✅ Added {len(emails)} email/password pairs{Colors.ENDC}")
+                print(f"{Colors.OKGREEN}✅ Added {len(emails)} email/password pairs to data/emails.txt{Colors.ENDC}")
             except Exception as e:
                 print(f"{Colors.FAIL}❌ Failed to save emails: {e}{Colors.ENDC}")
     
@@ -413,11 +325,11 @@ def interactive_file_setup():
         
         if proxies:
             try:
-                with open('proxies.txt', 'a') as f:
+                with open('data/proxies.txt', 'a') as f:
                     f.write('\n# Added by setup wizard:\n')
                     for proxy in proxies:
                         f.write(f"{proxy}\n")
-                print(f"{Colors.OKGREEN}✅ Added {len(proxies)} proxies{Colors.ENDC}")
+                print(f"{Colors.OKGREEN}✅ Added {len(proxies)} proxies to data/proxies.txt{Colors.ENDC}")
             except Exception as e:
                 print(f"{Colors.FAIL}❌ Failed to save proxies: {e}{Colors.ENDC}")
 
@@ -430,6 +342,20 @@ def test_basic_functionality():
         with open('config.json', 'r') as f:
             config = json.load(f)
         print(f"{Colors.OKGREEN}✅ Configuration file valid{Colors.ENDC}")
+        
+        # Test data directory access
+        data_dir = pathlib.Path("data")
+        if data_dir.exists() and data_dir.is_dir():
+            print(f"{Colors.OKGREEN}✅ Data directory accessible{Colors.ENDC}")
+        
+        # Test file paths in config
+        file_paths = config.get('file_paths', {})
+        for file_type, file_path in file_paths.items():
+            path = pathlib.Path(file_path)
+            if path.exists():
+                print(f"{Colors.OKGREEN}✅ {file_type} file exists: {file_path}{Colors.ENDC}")
+            else:
+                print(f"{Colors.WARNING}⚠️  {file_type} file missing: {file_path}{Colors.ENDC}")
         
         # Test imports
         try:
@@ -458,6 +384,9 @@ def main():
         print(f"\n{Colors.FAIL}❌ Setup failed due to missing dependencies{Colors.ENDC}")
         return False
     
+    # Create directories
+    created_dirs = create_directories()
+    
     # Create config files
     created_files = create_config_files()
     
@@ -473,7 +402,7 @@ def main():
     test_basic_functionality()
     
     # Print summary
-    print_setup_summary(created_files, service_status)
+    print_setup_summary(created_dirs, created_files, service_status)
     
     print(f"\n{Colors.OKGREEN}🎉 Setup completed! You're ready to use the Enhanced Auto-Login tool.{Colors.ENDC}")
     return True

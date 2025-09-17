@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+API Server for Turnstile Solver & Phone Number Services
+Provides endpoints for captcha solving and phone verification
+"""
+
 import time
 import uuid
 import asyncio
@@ -13,6 +19,18 @@ from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import weakref
+
+# Color codes for better terminal output
+class Colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 class PhoneAPIService(str, Enum):

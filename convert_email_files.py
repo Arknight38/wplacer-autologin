@@ -8,24 +8,34 @@ import os
 import sys
 from pathlib import Path
 
+# Color codes for better terminal output
+class Colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 def print_banner():
     """Print application banner"""
     print("=" * 60)
-    print("    Account Data Format Converter")
-    print("    Converts: email\\tpassword|recovery → email|password")
+    print(f"{Colors.HEADER}    Account Data Format Converter{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}    Converts: email\\tpassword|recovery → email|password{Colors.ENDC}")
     print("=" * 60)
     print()
-
-import os
 
 def get_input_file():
     """Get input file from user with validation (supports subfolders)."""
     while True:
-        print("📁 Input File Selection:")
+        print(f"{Colors.OKBLUE}📁 Input File Selection:{Colors.ENDC}")
         print("1. Enter custom file path")
         print("2. List .txt files in current directory (and subfolders)")
 
-        choice = input("\nChoose option (1-2): ").strip()
+        choice = input(f"\n{Colors.BOLD}Choose option (1-2):{Colors.ENDC} ").strip()
 
         if choice == "1":
             filename = input("Enter file path: ").strip()
