@@ -636,6 +636,7 @@ def main():
     parser.add_argument('--config', action='store_true', help='Run configuration wizard')
     parser.add_argument('--interactive-only', action='store_true', help='Only run interactive browser sessions')
     parser.add_argument('--no-progress', action='store_true', help='Disable progress bar')
+    parser.add_argument('--manual-login', action='store_true', help='Enable manual login for failed accounts')
     args = parser.parse_args()
     
     print_banner()
@@ -648,11 +649,6 @@ def main():
         logger.info(f"{Colors.OKBLUE}📋 Loaded configuration (use --config to modify){Colors.ENDC}")
     
     # Load state and accounts
-    from enhanced_autologin_core import (
-        load_state, save_state, get_accounts_by_status, 
-        process_account_enhanced, tor_newnym_cookie
-    )
-    
     state = load_state()
     total_accounts = len(state["accounts"])
     
@@ -732,7 +728,7 @@ def main():
     
     # Final summary
     total_time = time.time() - start_time
-    print_final_summary(state, total_time)
+    account_summary = print_final_summary(state, total_time)
     
     # Open interactive browsers for accounts needing phone verification
     if config.get("interactive_browser_for_phone", True):
@@ -740,6 +736,32 @@ def main():
         print("🌐 Opening Interactive Browser Sessions")
         print(f"{'='*80}{Colors.ENDC}")
         browser_manager.open_interactive_browsers()
+    
+    # Handle manual login for failed accounts if enabled
+    if args.manual_login and (account_summary["error"] or account_summary["phone_needed"]):
+        print(f"\n{Colors.HEADER}{'='*80}")
+        print("🔄 MANUAL LOGIN FOR FAILED ACCOUNTS")
+        print(f"{'='*80}{Colors.ENDC}")
+        
+        # Combine error and phone_needed accounts
+        failed_indices = account_summary["error"] + account_summary["phone_needed"]
+        display_failed_accounts_summary(state, failed_indices)
+        
+        print(f"\n{Colors.WARNING}Do you want to manually log in to failed accounts? (y/n){Colors.ENDC}")
+        if input().lower().strip() == 'y':
+            while True:
+                print(f"\n{Colors.WARNING}Enter account number to log in (1-{len(failed_indices)}), or 0 to exit:{Colors.ENDC}")
+                try:
+                    choice = int(input().strip())
+                    if choice == 0:
+                        break
+                    if 1 <= choice <= len(failed_indices):
+                        account_idx = failed_indices[choice - 1]
+                        handle_manual_login(state, account_idx, config)
+                    else:
+                        print(f"{Colors.FAIL}Invalid choice. Please enter a number between 1 and {len(failed_indices)}{Colors.ENDC}")
+                except ValueError:
+                    print(f"{Colors.FAIL}Please enter a valid number{Colors.ENDC}")
     
     # Final state save
     state["cursor"]["next_index"] = total_accounts
@@ -768,6 +790,75 @@ def print_final_summary(state, total_time):
         avg_time = total_time / (total_accounts - len(pending_accounts))
         print(f"{Colors.OKBLUE}⚡ Average per account: {avg_time:.1f} seconds{Colors.ENDC}")
     print(f"{Colors.HEADER}{'='*80}{Colors.ENDC}")
+    
+    return {
+        "ok": ok_accounts,
+        "error": error_accounts,
+        "phone_needed": phone_needed,
+        "pending": pending_accounts
+    }
+
+def display_failed_accounts_summary(state, failed_indices):
+    """Display a summary of failed accounts for manual processing"""
+    if not failed_indices:
+        print(f"{Colors.OKGREEN}✅ No failed accounts to display{Colors.ENDC}")
+        return
+    
+    print(f"\n{Colors.HEADER}{'='*80}")
+    print("❌ FAILED ACCOUNTS SUMMARY")
+    print(f"{'='*80}{Colors.ENDC}")
+    
+    for i, idx in enumerate(failed_indices):
+        acc = state["accounts"][idx]
+        print(f"{Colors.BOLD}{i+1}. {acc['email']}{Colors.ENDC}")
+        print(f"   Status: {Colors.FAIL}{acc['status']}{Colors.ENDC}")
+        print(f"   Error: {Colors.WARNING}{acc.get('last_error', 'Unknown error')}{Colors.ENDC}")
+        print(f"   Last attempt: {acc.get('last_attempt', 'Never')}")
+        print()
+    
+    print(f"{Colors.HEADER}{'='*80}{Colors.ENDC}")
+
+def handle_manual_login(state, account_idx, config):
+    """Handle manual login for a failed account"""
+    acc = state["accounts"][account_idx]
+    email = acc["email"]
+    password = acc["password"]
+    
+    print(f"\n{Colors.HEADER}{'='*80}")
+    print(f"🔄 MANUAL LOGIN: {email}")
+    print(f"{'='*80}{Colors.ENDC}")
+    
+    # Create browser manager for interactive session
+    browser_manager = InteractiveBrowserManager(config)
+    
+    # Add account for verification
+    browser_manager.add_account_for_verification({
+        'email': email,
+        'google_login_url': config.get("google_login_url", "https://accounts.google.com/signin"),
+        'reason': "manual_login"
+    })
+    
+    # Open interactive browser
+    print(f"{Colors.OKCYAN}🌐 Opening interactive browser for manual login...{Colors.ENDC}")
+    browser_manager.open_interactive_browsers()
+    
+    # Ask user if login was successful
+    print(f"\n{Colors.WARNING}Did the manual login for {email} succeed? (y/n){Colors.ENDC}")
+    success = input().lower().strip() == 'y'
+    
+    if success:
+        acc["status"] = "ok"
+        acc["last_error"] = ""
+        acc["result"] = {
+            "timestamp": datetime.now().isoformat(),
+            "manual": True
+        }
+        print(f"{Colors.OKGREEN}✅ Account marked as successful{Colors.ENDC}")
+    else:
+        print(f"{Colors.FAIL}❌ Account remains marked as failed{Colors.ENDC}")
+    
+    save_state(state)
+    return success
 
 # Helper functions for the core functionality
 def exists(fr_or_pg, sel, t=500):
