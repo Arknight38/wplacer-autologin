@@ -171,12 +171,3 @@ Logs and debugging:
 
 - `data.json` contains account statuses and results — keep it private.
 - This tool is intended for automation on accounts you own and test systems you control. Do not use it to access accounts you do not own or to bypass security controls.
-
----
-
-If you'd like, I can also:
-
-- Add example `config.json` into the repo (safe defaults).
-- Add a small example `POST_URL` receiver script for local testing.
-
-What would you prefer next?

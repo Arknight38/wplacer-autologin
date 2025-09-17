@@ -16,27 +16,35 @@ def print_banner():
     print("=" * 60)
     print()
 
+import os
+
 def get_input_file():
-    """Get input file from user with validation"""
+    """Get input file from user with validation (supports subfolders)."""
     while True:
         print("📁 Input File Selection:")
-        print("1. Use default 'accounts.txt'")
-        print("2. Enter custom file path")
-        print("3. List files in current directory")
-        
-        choice = input("\nChoose option (1-3): ").strip()
-        
+        print("1. Enter custom file path")
+        print("2. List .txt files in current directory (and subfolders)")
+
+        choice = input("\nChoose option (1-2): ").strip()
+
         if choice == "1":
-            filename = "accounts.txt"
-        elif choice == "2":
             filename = input("Enter file path: ").strip()
-        elif choice == "3":
-            print("\nFiles in current directory:")
+
+        elif choice == "2":
+            print("\n🔍 Searching for .txt files...\n")
             try:
-                files = [f for f in os.listdir('.') if f.endswith('.txt')]
+                files = []
+                for root, _, filenames in os.walk("."):
+                    for f in filenames:
+                        if f.endswith(".txt"):
+                            # Store relative path
+                            rel_path = os.path.relpath(os.path.join(root, f), ".")
+                            files.append(rel_path)
+
                 if files:
                     for i, f in enumerate(files, 1):
                         print(f"  {i}. {f}")
+
                     try:
                         file_choice = int(input(f"\nSelect file (1-{len(files)}): ")) - 1
                         if 0 <= file_choice < len(files):
@@ -48,25 +56,28 @@ def get_input_file():
                         print("❌ Please enter a valid number!")
                         continue
                 else:
-                    print("  No .txt files found in current directory")
+                    print("  No .txt files found in current directory or subfolders.")
                     continue
+
             except PermissionError:
-                print("❌ Permission denied reading directory")
+                print("❌ Permission denied while scanning directories.")
                 continue
+
         else:
-            print("❌ Invalid option! Please choose 1, 2, or 3.")
+            print("❌ Invalid option! Please choose 1 or 2.")
             continue
-        
+
         # Validate file exists and is readable
         if not os.path.exists(filename):
             print(f"❌ File '{filename}' not found!")
             continue
-        
+
         if not os.access(filename, os.R_OK):
             print(f"❌ Cannot read file '{filename}' - permission denied!")
             continue
-            
+
         return filename
+
 
 def get_output_file():
     """Get output file from user"""
